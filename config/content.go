@@ -68,7 +68,7 @@ func (p *OIDCProvider) ResolveConfig() error {
 	p.IssuerUrl = data.Issuer
 
 	p.Callback = fmt.Sprintf(
-		"%s/auth/%s/callback/",
+		"%s/auth/%s/callback",
 		RemoveTrailingChar(Cfg.Content.OIDC.CallbackBaseUrl, '/'),
 		p.Id,
 	)
