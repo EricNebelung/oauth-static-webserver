@@ -1,0 +1,34 @@
+networks:
+  oauth-static-webserver:
+    external: false
+
+services:
+  oauth-static-webserver:
+    build:
+      context: .
+    restart: always
+    environment:
+      - SESSION_KEY=647862347854624378567
+      - SESSION_REDIS_ADDRESS=session-storage
+      - SESSION_REDIS_PORT=6379
+      - SESSION_STORE_DRIVER=redis
+    ports:
+      - "8080:8080"
+    networks:
+      - oauth-static-webserver
+    volumes:
+      - "./config.yaml:/etc/oauth-resource-proxy/config.yaml:ro"
+      - "./work:/var/www:ro"
+    depends_on:
+      - session-storage
+  session-storage:
+    image: redis:latest
+    restart: always
+    networks:
+      - oauth-static-webserver
+    volumes:
+      - cache:/data
+
+volumes:
+  cache:
+    driver: local
