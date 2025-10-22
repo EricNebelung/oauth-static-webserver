@@ -112,14 +112,14 @@ func createSessionStore() (*sessionStore, error) {
 		)
 		store.Options.MaxAge = 60 * 60 * 24 // 1 day
 		if err != nil {
-			slog.Error("Error creating redis session store: ", err)
+			slog.Error("Error creating redis session store", "err", err)
 			return nil, err
 		}
 		return &sessionStore{RedisStore: store}, nil
 	} else if cfg.StoreDriver != "filesystem" {
 		err := os.MkdirAll(cfg.StoreDirectory, 0700)
 		if err != nil {
-			slog.Error("Error creating redis session store: ", err)
+			slog.Error("Error creating Filesystem session store", "err", err)
 			return nil, err
 		}
 

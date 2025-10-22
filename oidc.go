@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -50,7 +51,8 @@ func newOidcProvider(config config.OIDCProvider) (*oidcProvider, error) {
 
 	p, err := oidc.NewProvider(ctx, config.IssuerUrl)
 	if err != nil {
-		return nil, fmt.Errorf("fehler beim Initialisieren des OIDC-Providers: %w", err)
+		slog.Error("Failed to create OIDC provider ", "err", err)
+		return nil, errors.New("failed to create OIDC provider")
 	}
 	oauth2Config := oauth2.Config{
 		ClientID:     config.ClientID,
