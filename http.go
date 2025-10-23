@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"oauth-static-webserver/config"
 	"os"
+	"strings"
 
 	"github.com/boj/redistore"
 	"github.com/gorilla/sessions"
@@ -17,16 +18,18 @@ import (
 )
 
 type Webserver struct {
-	e *echo.Echo
+	e   *echo.Echo
+	cfg *config.Config
 
 	fsStore    *sessions.FilesystemStore
 	redisStore *redistore.RediStore
 }
 
 // NewWebserver creates the Echo instanz, the session store and register all middleware and pages.
-func NewWebserver() (*Webserver, error) {
+func NewWebserver(cfg *config.Config) (*Webserver, error) {
 	ws := &Webserver{
-		e: echo.New(),
+		e:   echo.New(),
+		cfg: cfg,
 	}
 	err := ws.createSessionStore()
 	if err != nil {
@@ -48,8 +51,8 @@ func NewWebserver() (*Webserver, error) {
 	slog.Debug("OIDC Auth Callback handler registered")
 
 	// register all pages
-	for _, page := range config.Cfg.Content.StaticPages {
-		_, err := createStaticPage(ws.e, page)
+	for _, page := range cfg.Content.StaticPages {
+		_, err := createStaticPage(ws.e, page, cfg.Content.OIDC.BaseUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +70,7 @@ func NewWebserver() (*Webserver, error) {
 
 // Start the webserver with the Address and Port specified in the config.
 func (w *Webserver) Start() error {
-	address := config.Cfg.Settings.GetWSAddress()
+	address := w.cfg.Settings.GetWSAddress()
 	slog.Info(fmt.Sprintf("Listening on %s", address))
 	return w.e.Start(address)
 }
@@ -103,7 +106,7 @@ func (w *Webserver) getStore() (sessions.Store, error) {
 
 // createSessionStore build the session store from config and set it into the object.
 func (w *Webserver) createSessionStore() error {
-	cfg := config.Cfg.Settings.Session
+	cfg := &w.cfg.Settings.Session
 	if cfg.StoreDriver == "redis" {
 		store, err := redistore.NewRediStore(
 			cfg.Redis.PoolSize, "tcp",
@@ -135,7 +138,7 @@ func (w *Webserver) createSessionStore() error {
 	return errors.New("invalid session store driver")
 }
 
-func createStaticPage(e *echo.Echo, config config.StaticPage) (*echo.Group, error) {
+func createStaticPage(e *echo.Echo, config config.StaticPage, baseUrl1 string) (*echo.Group, error) {
 	slog.Info(
 		"Starting registering static page",
 		"id", config.Id,
@@ -143,18 +146,16 @@ func createStaticPage(e *echo.Echo, config config.StaticPage) (*echo.Group, erro
 		"url", config.Url,
 	)
 
-	baseUrl := config.Url
 	// remove trailing slash if present
-	if baseUrl[len(baseUrl)-1] == '/' {
-		baseUrl = baseUrl[:len(baseUrl)-1]
-	}
-	group := e.Group(baseUrl)
+	baseContentUrl := strings.TrimRight(config.Url, "/")
+
+	group := e.Group(baseContentUrl)
 
 	// attach protection if configured
 	protection := config.Protection
 	if protection != nil {
 		slog.Info("attaching protection for static page", "id", config.Id, "provider", protection.Provider)
-		group.Use(RequireAuthMiddleware(protection.Provider, protection.Groups))
+		group.Use(RequireAuthMiddleware(protection.Provider, protection.Groups, baseUrl1))
 	}
 
 	group.Static("/", config.Dir)

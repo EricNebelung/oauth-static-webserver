@@ -42,7 +42,7 @@ func (c *ContentConfig) Validate(validate *validator.Validate) error {
 func (c *ContentConfig) Resolve() error {
 	c.OIDC.BaseUrl = strings.TrimRight(c.OIDC.BaseUrl, "/")
 	for i := range c.OIDC.Providers {
-		err := c.OIDC.Providers[i].ResolveConfig()
+		err := c.OIDC.Providers[i].ResolveConfig(c.OIDC.BaseUrl)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ type OIDCProvider struct {
 	IssuerUrl    string
 }
 
-func (p *OIDCProvider) ResolveConfig() error {
+func (p *OIDCProvider) ResolveConfig(baseUrl string) error {
 	var data struct {
 		Issuer string `json:"issuer"`
 	}
@@ -69,11 +69,7 @@ func (p *OIDCProvider) ResolveConfig() error {
 	}
 	p.IssuerUrl = data.Issuer
 
-	p.Callback = fmt.Sprintf(
-		"%s/auth/%s/callback",
-		Cfg.Content.OIDC.BaseUrl,
-		p.Id,
-	)
+	p.Callback = fmt.Sprintf("%s/auth/%s/callback", baseUrl, p.Id)
 
 	return nil
 }
