@@ -1,0 +1,18 @@
+oidc:
+  # Base URL for callback - must accessible from the internet
+  # often the reverse proxy
+  callback_base_url: "http://localhost:8080/"
+  providers:
+    - id: idp
+      config_url: "[WELL-KNOWN-URL]"
+      client_id: "[CLIENT_ID]"
+      client_secret: "[CLIENT_SECRET_KEY]"
+static_pages:
+  - id: page1
+    dir: "/var/www/page1"
+    url: "/static/page1"
+  - id: page2
+    dir: "/var/www/page2"
+    url: "/static/page2"
+    protection:
+      provider: idp
