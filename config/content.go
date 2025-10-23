@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"gopkg.in/yaml.v3"
@@ -14,8 +15,8 @@ import (
 
 type ContentConfig struct {
 	OIDC struct {
-		CallbackBaseUrl string         `yaml:"callback_base_url" validate:"required,url"`
-		Providers       []OIDCProvider `yaml:"providers" validate:"dive,required"`
+		BaseUrl   string         `yaml:"base_url" validate:"required,url"`
+		Providers []OIDCProvider `yaml:"providers" validate:"dive,required"`
 	} `yaml:"oidc" validate:"required"`
 	StaticPages []StaticPage `yaml:"static_pages" validate:"dive,required"`
 }
@@ -39,6 +40,7 @@ func (c *ContentConfig) Validate(validate *validator.Validate) error {
 }
 
 func (c *ContentConfig) Resolve() error {
+	c.OIDC.BaseUrl = strings.TrimRight(c.OIDC.BaseUrl, "/")
 	for i := range c.OIDC.Providers {
 		err := c.OIDC.Providers[i].ResolveConfig()
 		if err != nil {
@@ -69,7 +71,7 @@ func (p *OIDCProvider) ResolveConfig() error {
 
 	p.Callback = fmt.Sprintf(
 		"%s/auth/%s/callback",
-		RemoveTrailingChar(Cfg.Content.OIDC.CallbackBaseUrl, '/'),
+		Cfg.Content.OIDC.BaseUrl,
 		p.Id,
 	)
 
@@ -101,7 +103,8 @@ type StaticPage struct {
 	Dir        string `yaml:"dir" validate:"dir"`
 	Url        string `yaml:"url" validate:"required,uri"`
 	Protection *struct {
-		Provider string `yaml:"provider" validate:"alphanum"`
+		Provider string   `yaml:"provider" validate:"alphanum"`
+		Groups   []string `yaml:"groups" validate:"dive,alphanum"`
 	}
 }
 

@@ -158,7 +158,7 @@ func RegisterCallbackHandler(e *echo.Echo) {
 	})
 }
 
-func RequireAuthMiddleware(providerId string) echo.MiddlewareFunc {
+func RequireAuthMiddleware(providerId string, allowedGroups []string) echo.MiddlewareFunc {
 	provider, ok := providers[providerId]
 	if !ok {
 		panic("Unbekannter OIDC-Provider in RequireAuthMiddleware: " + providerId)
@@ -185,9 +185,30 @@ func RequireAuthMiddleware(providerId string) echo.MiddlewareFunc {
 				return redirectForAuth(oauth2Config, c)
 			}
 
+			if !checkHasOneGroup(allowedGroups, providerSession.Groups) {
+				// TODO: resolve error url once and store global
+				errUrl := fmt.Sprintf("%s/error/no-permissions.html", config.Cfg.Content.OIDC.BaseUrl)
+				return c.Redirect(http.StatusFound, errUrl)
+			}
+
 			return next(c)
 		}
 	}
+}
+
+func checkHasOneGroup(allowed, present []string) bool {
+	// when no group allowed, then no rule presentGroup rule is present
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, presentGroup := range present {
+		for _, allowedGroup := range allowed {
+			if presentGroup == allowedGroup {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func redirectForAuth(oauth2Config oauth2.Config, c echo.Context) error {

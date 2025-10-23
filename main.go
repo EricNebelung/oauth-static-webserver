@@ -20,5 +20,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Fatal(StartWebserver())
+	ws, err := NewWebserver()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		err := ws.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+	log.Fatal(ws.Start())
 }

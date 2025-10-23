@@ -26,10 +26,3 @@ func validateStruct(validate *validator.Validate, value any) error {
 type Resolvable interface {
 	Resolve() error
 }
-
-func RemoveTrailingChar(str string, c byte) string {
-	if str[len(str)-1] == c {
-		return str[:len(str)-1]
-	}
-	return str
-}

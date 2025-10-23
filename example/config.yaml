@@ -1,7 +1,7 @@
 oidc:
-  # Base URL for callback - must accessible from the internet
+  # Base URL for callback (and more) - must accessible from the internet
   # often the reverse proxy
-  callback_base_url: "http://localhost:8080/"
+  base_url: "http://localhost:8080/"
   providers:
     - id: idp
       config_url: "[WELL-KNOWN-URL]"
