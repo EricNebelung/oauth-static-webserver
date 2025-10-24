@@ -41,12 +41,6 @@ func (c *ContentConfig) Validate(validate *validator.Validate) error {
 
 func (c *ContentConfig) Resolve() error {
 	c.OIDC.BaseUrl = strings.TrimRight(c.OIDC.BaseUrl, "/")
-	for i := range c.OIDC.Providers {
-		err := c.OIDC.Providers[i].ResolveConfig(c.OIDC.BaseUrl)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

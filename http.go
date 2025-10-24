@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"log/slog"
 	"oauth-static-webserver/config"
+	oidc2 "oauth-static-webserver/oidc"
 	"os"
 	"strings"
 
@@ -15,44 +15,48 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Webserver struct {
-	e   *echo.Echo
-	cfg *config.Config
+	e    *echo.Echo
+	cfg  *config.Config
+	oidc *oidc2.OIDC
 
 	fsStore    *sessions.FilesystemStore
 	redisStore *redistore.RediStore
 }
 
 // NewWebserver creates the Echo instanz, the session store and register all middleware and pages.
-func NewWebserver(cfg *config.Config) (*Webserver, error) {
+func NewWebserver(cfg *config.Config, oidc *oidc2.OIDC) (*Webserver, error) {
 	ws := &Webserver{
-		e:   echo.New(),
-		cfg: cfg,
+		e:    echo.New(),
+		cfg:  cfg,
+		oidc: oidc,
 	}
 	err := ws.createSessionStore()
 	if err != nil {
-		slog.Error("Error creating session store", "err", err)
+		log.WithError(err).Error("Error creating session store")
 		return nil, err
 	}
-	slog.Info("Session-Store initialized")
+	log.Info("Session-Store initialized")
 
 	// register session store
 	store, err := ws.getStore()
 	if err != nil {
-		slog.Error("Error getting session store", "err", err)
+		log.WithError(err).Error("Error getting session store")
 		return nil, err
 	}
 	ws.e.Use(session.Middleware(store))
 
 	// setup webserver routes
-	RegisterCallbackHandler(ws.e)
-	slog.Debug("OIDC Auth Callback handler registered")
+	ws.e.GET("/auth/:provider/callback", oidc.CreateCallbackHandler())
+	log.Debug("OIDC Auth Callback handler registered")
 
 	// register all pages
 	for _, page := range cfg.Content.StaticPages {
-		_, err := createStaticPage(ws.e, page, cfg.Content.OIDC.BaseUrl)
+		_, err := ws.createStaticPage(ws.e, page)
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +142,7 @@ func (w *Webserver) createSessionStore() error {
 	return errors.New("invalid session store driver")
 }
 
-func createStaticPage(e *echo.Echo, config config.StaticPage, baseUrl1 string) (*echo.Group, error) {
+func (w *Webserver) createStaticPage(e *echo.Echo, config config.StaticPage) (*echo.Group, error) {
 	slog.Info(
 		"Starting registering static page",
 		"id", config.Id,
@@ -155,7 +159,13 @@ func createStaticPage(e *echo.Echo, config config.StaticPage, baseUrl1 string) (
 	protection := config.Protection
 	if protection != nil {
 		slog.Info("attaching protection for static page", "id", config.Id, "provider", protection.Provider)
-		group.Use(RequireAuthMiddleware(protection.Provider, protection.Groups, baseUrl1))
+		//group.Use(RequireAuthMiddleware(protection.Provider, protection.Groups, baseUrl1))
+		protector, err := w.oidc.CreateMiddleware(protection.Provider, protection.Groups)
+		if err != nil {
+			log.WithError(err).Error("Error creating protection middleware")
+			return nil, err
+		}
+		group.Use(protector)
 	}
 
 	group.Static("/", config.Dir)

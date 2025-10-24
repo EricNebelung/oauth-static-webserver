@@ -1,15 +1,11 @@
-package main
+package oidc
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log"
-	"log/slog"
 	"net/http"
 	"oauth-static-webserver/config"
 	"time"
@@ -18,78 +14,43 @@ import (
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
+
+	log "github.com/sirupsen/logrus"
 )
 
-const sessionName = "oidc_auth_session"
-const providerSessionsKey = "oidc_provider_sessions"
+type OIDC struct {
+	providers Providers
+	baseUrl   string
+}
+
+func New(providers Providers, baseUrl string) *OIDC {
+	return &OIDC{
+		providers: providers,
+		baseUrl:   baseUrl,
+	}
+}
+
+func NewFromConfig(cfg []config.OIDCProvider, baseUrl string) (*OIDC, error) {
+	ps, err := newProviders(cfg, baseUrl)
+	if err != nil {
+		return nil, err
+	}
+	return New(ps, baseUrl), nil
+}
 
 type jwtClaims struct {
 	Subject string   `json:"sub"`
 	Groups  []string `json:"groups"`
 }
 
-type ProviderSession struct {
-	ExpiresAt int64    `json:"expires_at"`
-	Subject   string   `json:"subject"`
-	Groups    []string `json:"groups"`
-}
-
-var providers = make(map[string]*oidcProvider)
-
-type oidcProvider struct {
-	provider     *oidc.Provider
-	oauth2Config oauth2.Config
-}
-
-func init() {
-	gob.Register(ProviderSession{})
-	gob.Register(map[string]ProviderSession{})
-}
-
-func newOidcProvider(config config.OIDCProvider) (*oidcProvider, error) {
-	ctx := context.Background()
-
-	p, err := oidc.NewProvider(ctx, config.IssuerUrl)
-	if err != nil {
-		slog.Error("Failed to create OIDC provider ", "err", err)
-		return nil, errors.New("failed to create OIDC provider")
-	}
-	oauth2Config := oauth2.Config{
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		RedirectURL:  config.Callback,
-		Endpoint:     p.Endpoint(),
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "groups"},
-	}
-
-	return &oidcProvider{
-		provider:     p,
-		oauth2Config: oauth2Config,
-	}, nil
-}
-
-func InitOIDCProviders(config []config.OIDCProvider) error {
-	slog.Info("Initializing OIDC Providers")
-	for _, c := range config {
-		slog.Debug("Initializing OIDC Provider", "id", c.Id)
-		p, err := newOidcProvider(c)
-		if err != nil {
-			return err
-		}
-		providers[c.Id] = p
-	}
-	return nil
-}
-
-// --- Handler und Middleware ---
-
-// RegisterCallbackHandler register the main callback handler for OIDC. It delegates to the appropriate provider handler by the :provider url param.
-func RegisterCallbackHandler(e *echo.Echo) {
-	e.GET("/auth/:provider/callback", func(c echo.Context) error {
+// CreateCallbackHandler create a callback handler for all providers by using the
+// parameter "provider" to auth on the right OIDC Provider.
+func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
+	return func(c echo.Context) error {
 		ctx := context.Background()
 
 		providerId := c.Param("provider")
-		oidcProv, ok := providers[providerId]
+		oidcProv, ok := o.providers[providerId]
 		if !ok {
 			return c.String(http.StatusBadRequest, "Unbekannter OIDC-Provider")
 		}
@@ -155,13 +116,22 @@ func RegisterCallbackHandler(e *echo.Echo) {
 		}
 		// redirect to original target
 		return c.Redirect(http.StatusFound, redirectURL)
-	})
+	}
 }
 
-func RequireAuthMiddleware(providerId string, allowedGroups []string, baseUrl string) echo.MiddlewareFunc {
-	provider, ok := providers[providerId]
+// CreateMiddleware create a middleware, which protect all following routes.
+// It checks for user auth and redirect to IdP auth url if needed or redirect to an error page.
+// The providerId is required to link to the right provider and the user must be in one of the allowedGroups
+// to pass the auth test. If the list is empty, then the group check is disabled.
+func (o *OIDC) CreateMiddleware(
+	providerId string,
+	allowedGroups []string,
+) (echo.MiddlewareFunc, error) {
+	provider, ok := o.providers[providerId]
 	if !ok {
-		panic("Unbekannter OIDC-Provider in RequireAuthMiddleware: " + providerId)
+		errorMsg := fmt.Errorf("no OIDC provider with ID %s", providerId)
+		log.Error(errorMsg)
+		return nil, errorMsg
 	}
 	oauth2Config := provider.oauth2Config
 
@@ -187,28 +157,13 @@ func RequireAuthMiddleware(providerId string, allowedGroups []string, baseUrl st
 
 			if !checkHasOneGroup(allowedGroups, providerSession.Groups) {
 				// TODO: resolve error url once and store global
-				errUrl := fmt.Sprintf("%s/error/no-permissions.html", baseUrl)
+				errUrl := fmt.Sprintf("%s/error/no-permissions.html", o.baseUrl)
 				return c.Redirect(http.StatusFound, errUrl)
 			}
 
 			return next(c)
 		}
-	}
-}
-
-func checkHasOneGroup(allowed, present []string) bool {
-	// when no group allowed, then no rule presentGroup rule is present
-	if len(allowed) == 0 {
-		return true
-	}
-	for _, presentGroup := range present {
-		for _, allowedGroup := range allowed {
-			if presentGroup == allowedGroup {
-				return true
-			}
-		}
-	}
-	return false
+	}, nil
 }
 
 func redirectForAuth(oauth2Config oauth2.Config, c echo.Context) error {
@@ -236,4 +191,19 @@ func redirectForAuth(oauth2Config oauth2.Config, c echo.Context) error {
 
 	authURL := oauth2Config.AuthCodeURL(state)
 	return c.Redirect(http.StatusFound, authURL)
+}
+
+func checkHasOneGroup(allowed, present []string) bool {
+	// when no group allowed, then no rule presentGroup rule is present
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, presentGroup := range present {
+		for _, allowedGroup := range allowed {
+			if presentGroup == allowedGroup {
+				return true
+			}
+		}
+	}
+	return false
 }
