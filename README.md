@@ -1,3 +1,105 @@
-This project is currently in development!
+# oauth-static-webserver
 
-DO NOT USE THIS IN PRODUCTION!
+## Status
+
+**IMPORTANT:** **Do not use this software in any Production Environment.**
+This project is intended for **testing and educational purposes only**.
+
+The software is **not fully tested** yet and is currently under active development. There are no immediate plans to make it production-ready.
+
+## Goals
+
+- easy to use static web server with OIDC Protection
+- simple configuration with one yaml file and some env Variables
+- extensive logging
+
+## TODOs
+
+- [ ] Integrate **TLS** for use without a reverse proxy.
+- [ ] Implement **extensive testing** (unit and integration tests).
+- [ ] Introduce **fine-grained access control rules** (beyond simple group membership).
+- [ ] **Documentation:**
+    - [ ] Fully cover **Usage and Installation methods**.
+    - [ ] Complete **code documentation** (GoDoc).
+    - [ ] Improve readability and helpfulness of the **README**.
+    - [ ] Conduct a language check (grammar, syntax, and style).
+- [ ] Integrate a **Prometheus interface** for exporting monitoring data.
+- [ ] Implement a **more robust and flexible IdP integration**:
+    - [ ] Add native OAuth2 support for major providers like Google, Microsoft, etc.
+- [ ] Add a **Licence**.
+
+---
+
+## Installation
+
+The simplest method is to use the included **Docker Compose**, which automatically build the required image.
+
+### manual
+
+Simply build the project with:
+```
+go build -o oauth-static-webserver
+```
+
+Then you can execute the binary.
+
+### docker
+
+At this time there is **no official image available**, you must build it by your  self.
+
+I recommend using the provided Docker Compose file to start the service:
+```
+docker compose -f compose-build.yaml up
+```
+
+**Additional Flags:**
+- `-d`: Run in detached mode (background).
+- `--build`: Force the image to be rebuilt.
+
+---
+
+## Usage
+
+Before starting, you must configure the server using a `config.yaml` file:
+```yaml
+oidc:
+  # Base URL for callback (and more) - must accessible from the internet
+  # often the reverse proxy
+  base_url: "http://localhost:8080/"
+  providers:
+    - id: idp
+      config_url: "[WELL-KNOWN-URL]"
+      client_id: "[CLIENT_ID]"
+      client_secret: "[CLIENT_SECRET_KEY]"
+static_pages:
+  - id: page1
+    dir: "/var/www/page1"
+    url: "/static/page1"
+  - id: page2
+    dir: "/var/www/page2"
+    url: "/static/page2"
+    protection:
+      provider: idp
+      groups:
+        - static_access
+```
+
+You will first define the available provider with:
+- `id` - The reference id inside the webserver
+- `config_url` - The well-known url from you OIDC Application for the IdP
+- `client_id` - The client id from the Application
+- `client_secret` - The client secret from the Application
+
+The `base_url` are the publicly exposed base url.
+Typically, this contains the url to your reverse proxy and maybe the subpath, which proxies to this static webserver. 
+
+Then you define the static pages:
+- `id` - The reference id of the static page (only for logging required)
+- `dir` - The path to the source directory. All content will be available from the `url`.
+- `url` - The root path to the static page. (serves the content from `dir`)
+- `protection` - The protection settings (optional)
+
+When no `protection` will be provided, then all content is publicly available.
+The `protection` contains:
+- `provider` - The `id` of the used OIDC Provider
+- `groups` - A list of all groups which are allowed to access the content. When no entry will be defined, then all authenticated user will be able to access the content.
