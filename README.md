@@ -26,7 +26,7 @@ The software is **not fully tested** yet and is currently under active developme
 - [ ] Integrate a **Prometheus interface** for exporting monitoring data.
 - [ ] Implement a **more robust and flexible IdP integration**:
     - [ ] Add native OAuth2 support for major providers like Google, Microsoft, etc.
-- [ ] Add a **Licence**.
+- [x] Add a **Licence**.
 
 ---
 
