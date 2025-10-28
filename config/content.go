@@ -1,11 +1,7 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
-	"net/http"
 	"os"
 	"strings"
 
@@ -14,11 +10,13 @@ import (
 )
 
 type ContentConfig struct {
-	OIDC struct {
-		BaseUrl   string         `yaml:"base_url" validate:"required,url"`
-		Providers []OIDCProvider `yaml:"providers" validate:"dive,required"`
-	} `yaml:"oidc" validate:"required"`
-	StaticPages []StaticPage `yaml:"static_pages" validate:"dive,required"`
+	OIDC        ContentConfigOIDC `yaml:"oidc" validate:"required"`
+	StaticPages []StaticPage      `yaml:"static_pages" validate:"dive,required"`
+}
+
+type ContentConfigOIDC struct {
+	BaseUrl   string         `yaml:"base_url" validate:"required,url"`
+	Providers []OIDCProvider `yaml:"providers" validate:"dive,required"`
 }
 
 func (c *ContentConfig) Validate(validate *validator.Validate) error {
@@ -49,53 +47,18 @@ type OIDCProvider struct {
 	ConfigUrl    string `yaml:"config_url" validate:"required,url"`
 	ClientID     string `yaml:"client_id" validate:"alphanum"`
 	ClientSecret string `yaml:"client_secret" validate:"alphanum"`
-	Callback     string
-	IssuerUrl    string
-}
-
-func (p *OIDCProvider) ResolveConfig(baseUrl string) error {
-	var data struct {
-		Issuer string `json:"issuer"`
-	}
-	err := resolveKnownConfig(p.ConfigUrl, &data)
-	if err != nil {
-		return err
-	}
-	p.IssuerUrl = data.Issuer
-
-	p.Callback = fmt.Sprintf("%s/auth/%s/callback", baseUrl, p.Id)
-
-	return nil
-}
-
-func resolveKnownConfig(url string, target any) error {
-	response, err := http.Get(url)
-	if err != nil {
-		slog.Warn("Failed to fetch OIDC provider config", "err", err)
-		return err
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			slog.Warn("Failed to close OIDC provider config response body", "err", err)
-		}
-	}(response.Body)
-	err = json.NewDecoder(response.Body).Decode(target)
-	if err != nil {
-		slog.Warn("Failed to decode OIDC provider config", "err", err)
-		return err
-	}
-	return nil
 }
 
 type StaticPage struct {
-	Id         string `yaml:"id" validate:"alphanum"`
-	Dir        string `yaml:"dir" validate:"dir"`
-	Url        string `yaml:"url" validate:"required,uri"`
-	Protection *struct {
-		Provider string   `yaml:"provider" validate:"alphanum"`
-		Groups   []string `yaml:"groups" validate:"dive,alphanum"`
-	}
+	Id         string                `yaml:"id" validate:"alphanum"`
+	Dir        string                `yaml:"dir" validate:"dir"`
+	Url        string                `yaml:"url" validate:"required,uri"`
+	Protection *StaticPageProtection `yaml:"protection"`
+}
+
+type StaticPageProtection struct {
+	Provider string   `yaml:"provider" validate:"alphanum"`
+	Groups   []string `yaml:"groups" validate:"dive,alphanum"`
 }
 
 func loadContentConfig(path string) (*ContentConfig, error) {

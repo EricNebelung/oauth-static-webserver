@@ -2,6 +2,7 @@ package main
 
 import (
 	"oauth-static-webserver/config"
+	"oauth-static-webserver/http"
 	oidc2 "oauth-static-webserver/oidc"
 	"os"
 
@@ -38,7 +39,7 @@ func StartServer(cfg *config.Config) error {
 		return err
 	}
 
-	ws, err := NewWebserver(cfg, oidc)
+	ws, err := http.NewWebserver(cfg, oidc)
 	if err != nil {
 		return err
 	}

@@ -7,27 +7,31 @@ import (
 )
 
 type Settings struct {
-	Host struct {
-		Address string `env:"ADDRESS"`
-		Port    int    `env:"PORT" env-default:"8080"`
-	} `env-prefix:"HOST_"`
-	Session struct {
-		Key string `env:"KEY"`
-		// Possible values: "filesystem", "redis"
-		StoreDriver string `env:"STORE_DRIVER" env-default:"filesystem" env-description:"Session store driver: filesystem or redis"`
-		// when redis
-		Redis struct {
-			Address  string `env:"ADDRESS"`
-			Port     int    `env:"PORT" env-default:"6379"`
-			Username string `env:"USERNAME"`
-			Password string `env:"PASSWORD"`
-			DB       int    `env:"DB" env-default:"0"`
-			PoolSize int    `env:"POOL_SIZE" env-default:"10"`
-		} `env-prefix:"REDIS_"`
-		// when filesystem
-		StoreDirectory string `env:"STORE_DIRECTORY"`
-	} `env-prefix:"SESSION_"`
-	ConfigPath string `env:"CONFIG_PATH" env-default:"/etc/oauth-resource-proxy/config.yaml"`
+	Host       SettingsHost    `env-prefix:"HOST_"`
+	Session    SettingsSession `env-prefix:"SESSION_"`
+	ConfigPath string          `env:"CONFIG_PATH" env-default:"/etc/oauth-resource-proxy/config.yaml"`
+}
+
+type SettingsHost struct {
+	Address string `env:"ADDRESS"`
+	Port    int    `env:"PORT" env-default:"8080"`
+}
+
+type SettingsSession struct {
+	Key string `env:"KEY"`
+	// Possible values: "filesystem", "redis"
+	StoreDriver string `env:"STORE_DRIVER" env-default:"filesystem" env-description:"Session store driver: filesystem or redis"`
+	// when redis
+	Redis struct {
+		Address  string `env:"ADDRESS"`
+		Port     int    `env:"PORT" env-default:"6379"`
+		Username string `env:"USERNAME"`
+		Password string `env:"PASSWORD"`
+		DB       int    `env:"DB" env-default:"0"`
+		PoolSize int    `env:"POOL_SIZE" env-default:"10"`
+	} `env-prefix:"REDIS_"`
+	// when filesystem
+	StoreDirectory string `env:"STORE_DIRECTORY"`
 }
 
 func loadSettingsFromEnv() (Settings, error) {

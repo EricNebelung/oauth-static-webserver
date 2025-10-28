@@ -157,8 +157,9 @@ func (o *OIDC) CreateMiddleware(
 
 			if !checkHasOneGroup(allowedGroups, providerSession.Groups) {
 				// TODO: resolve error url once and store global
-				errUrl := fmt.Sprintf("%s/error/no-permissions.html", o.baseUrl)
-				return c.Redirect(http.StatusFound, errUrl)
+				//errUrl := fmt.Sprintf("%s/error/no-permissions.html", o.baseUrl)
+				//return c.Redirect(http.StatusFound, errUrl)
+				return c.String(http.StatusForbidden, "You do not have the required permissions to access this resource.")
 			}
 
 			return next(c)

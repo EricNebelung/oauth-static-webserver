@@ -1,4 +1,4 @@
-package main
+package http
 
 import (
 	"embed"
@@ -79,6 +79,21 @@ func (w *Webserver) Start() error {
 	return w.e.Start(address)
 }
 
+// StartAsync the webserver in a new goroutine and provide a close function.
+func (w *Webserver) StartAsync() (func(), error) {
+	address := w.cfg.Settings.GetWSAddress()
+	log.Infof("Listening on %s", address)
+	go func() {
+		err := w.e.Start(address)
+		if err != nil {
+			log.WithError(err).Error("Error starting server")
+		}
+	}()
+	return func() {
+		_ = w.e.Close()
+	}, nil
+}
+
 func (w *Webserver) Close() error {
 	if w.redisStore != nil {
 		return w.redisStore.Close()
@@ -125,7 +140,7 @@ func (w *Webserver) createSessionStore() error {
 		store.Options.MaxAge = 60 * 60 * 24 // 1 day
 		w.redisStore = store
 		return nil
-	} else if cfg.StoreDriver != "filesystem" {
+	} else if cfg.StoreDriver == "filesystem" {
 		err := os.MkdirAll(cfg.StoreDirectory, 0700)
 		if err != nil {
 			slog.Error("Error creating Filesystem session store", "err", err)
