@@ -2,8 +2,14 @@ package test
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
 	"os"
+	"testing"
+	"time"
 
+	"github.com/go-playground/assert/v2"
 	"github.com/labstack/gommon/random"
 )
 
@@ -42,4 +48,23 @@ func PrepareContentFolder() (func(), string, error) {
 	return func() {
 		_ = os.RemoveAll(dirName)
 	}, dirName, nil
+}
+
+func HttpClient(t *testing.T) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &http.Client{Timeout: time.Second * 10, Jar: jar}
+}
+
+func AssertBodyString(t *testing.T, res *http.Response, expected string) {
+	t.Helper()
+	buf, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(buf)
+	assert.Equal(t, expected, body)
 }

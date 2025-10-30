@@ -1,4 +1,4 @@
-package oidc
+package main
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"oauth-static-webserver/config"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -30,7 +29,7 @@ func New(providers Providers, baseUrl string) *OIDC {
 	}
 }
 
-func NewFromConfig(cfg []config.OIDCProvider, baseUrl string) (*OIDC, error) {
+func NewFromConfig(cfg []OIDCProvider, baseUrl string) (*OIDC, error) {
 	ps, err := newProviders(cfg, baseUrl)
 	if err != nil {
 		return nil, err
@@ -156,9 +155,6 @@ func (o *OIDC) CreateMiddleware(
 			}
 
 			if !checkHasOneGroup(allowedGroups, providerSession.Groups) {
-				// TODO: resolve error url once and store global
-				//errUrl := fmt.Sprintf("%s/error/no-permissions.html", o.baseUrl)
-				//return c.Redirect(http.StatusFound, errUrl)
 				return c.String(http.StatusForbidden, "You do not have the required permissions to access this resource.")
 			}
 

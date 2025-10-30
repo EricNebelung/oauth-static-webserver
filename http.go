@@ -1,13 +1,9 @@
-package http
+package main
 
 import (
-	"embed"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
-	"oauth-static-webserver/config"
-	oidc2 "oauth-static-webserver/oidc"
 	"os"
 	"strings"
 
@@ -21,15 +17,15 @@ import (
 
 type Webserver struct {
 	e    *echo.Echo
-	cfg  *config.Config
-	oidc *oidc2.OIDC
+	cfg  *Config
+	oidc *OIDC
 
 	fsStore    *sessions.FilesystemStore
 	redisStore *redistore.RediStore
 }
 
 // NewWebserver creates the Echo instanz, the session store and register all middleware and pages.
-func NewWebserver(cfg *config.Config, oidc *oidc2.OIDC) (*Webserver, error) {
+func NewWebserver(cfg *Config, oidc *OIDC) (*Webserver, error) {
 	ws := &Webserver{
 		e:    echo.New(),
 		cfg:  cfg,
@@ -61,9 +57,6 @@ func NewWebserver(cfg *config.Config, oidc *oidc2.OIDC) (*Webserver, error) {
 			return nil, err
 		}
 	}
-
-	// add error pages
-	ws.setupErrorPages()
 
 	// hide some stuff
 	ws.e.HideBanner = true
@@ -99,18 +92,6 @@ func (w *Webserver) Close() error {
 		return w.redisStore.Close()
 	}
 	return nil
-}
-
-//go:embed static
-var embeddedFiles embed.FS
-
-func (w *Webserver) setupErrorPages() {
-	// get subdirectory to remove "static" in path
-	fsError, err := fs.Sub(embeddedFiles, "static")
-	if err != nil {
-		log.Fatal("Error getting embedded static files", "err", err)
-	}
-	w.e.StaticFS("/error", fsError)
 }
 
 // getStore return the existing store or an error, if no store exists.
@@ -153,11 +134,11 @@ func (w *Webserver) createSessionStore() error {
 		w.fsStore = store
 		return nil
 	}
-	slog.Error("Invalid session store driver: ", cfg.StoreDriver)
+	log.Errorf("Invalid session store driver: %s", cfg.StoreDriver)
 	return errors.New("invalid session store driver")
 }
 
-func (w *Webserver) createStaticPage(e *echo.Echo, config config.StaticPage) (*echo.Group, error) {
+func (w *Webserver) createStaticPage(e *echo.Echo, config StaticPage) (*echo.Group, error) {
 	slog.Info(
 		"Starting registering static page",
 		"id", config.Id,

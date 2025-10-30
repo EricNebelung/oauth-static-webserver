@@ -1,0 +1,105 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+	testHelper "oauth-static-webserver/internal/test"
+	"testing"
+
+	"github.com/go-playground/assert/v2"
+	"github.com/oauth2-proxy/mockoidc"
+)
+
+var (
+	User1 = &mockoidc.MockUser{
+		Subject:           "1",
+		PreferredUsername: "mocker1",
+		Groups:            []string{"group-test"},
+	}
+	User2 = &mockoidc.MockUser{
+		Subject:           "2",
+		PreferredUsername: "mocker2",
+		Groups:            nil,
+	}
+)
+
+type httpTestEnv struct {
+	M      *mockoidc.MockOIDC
+	WS     *Webserver
+	Client *http.Client
+}
+
+func (h *httpTestEnv) Close() error {
+	err := h.M.Shutdown()
+	if err != nil {
+		return err
+	}
+	return h.WS.Close()
+}
+
+func (h *httpTestEnv) url(path string) string {
+	return fmt.Sprintf("http://localhost:8454/%s", path)
+}
+
+func (h *httpTestEnv) resetClient(t *testing.T) {
+	h.Client = testHelper.HttpClient(t)
+}
+
+func newHttpTestEnv(t *testing.T) httpTestEnv {
+	t.Helper()
+	_, m, ws, err := SetupSWS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ws.StartAsync()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return httpTestEnv{m, ws, testHelper.HttpClient(t)}
+}
+
+// ------ TESTS ------
+
+func TestSuccessfulGet(t *testing.T) {
+	env := newHttpTestEnv(t)
+	defer func() {
+		err := env.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// testGet function to simplify repetitive tests
+	testGet := func(page int, expectedStatus int, expectedBody string) {
+		result, err := env.Client.Get(env.url(fmt.Sprintf("page%d/file.txt", page)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, expectedStatus, result.StatusCode)
+		if expectedBody != "" {
+			testHelper.AssertBodyString(t, result, expectedBody)
+		}
+	}
+
+	// --- test without user ---
+	testGet(1, 200, "page=1")
+	// no test without a user on protected paths -> mockoidc insert default user
+	//testGet(2, 403, "")
+	//testGet(3, 403, "")
+
+	// --- test with user1 ---
+	env.M.QueueUser(User1)
+	env.resetClient(t)
+
+	testGet(1, 200, "page=1")
+	testGet(2, 200, "page=2")
+	testGet(3, 200, "page=3")
+
+	// --- test with user2 ---
+	env.M.QueueUser(User2)
+	env.resetClient(t)
+
+	testGet(1, 200, "page=1")
+	testGet(2, 200, "page=2")
+	testGet(3, 403, "")
+}

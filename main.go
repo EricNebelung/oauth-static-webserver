@@ -1,9 +1,6 @@
 package main
 
 import (
-	"oauth-static-webserver/config"
-	"oauth-static-webserver/http"
-	oidc2 "oauth-static-webserver/oidc"
 	"os"
 
 	log "github.com/sirupsen/logrus"
@@ -21,7 +18,7 @@ func init() {
 func main() {
 	log.Info("initializing OAuth-Static-Webserver")
 
-	cfg, err := config.ProcessConfig()
+	cfg, err := LoadAndProcessConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,17 +26,17 @@ func main() {
 	log.Fatal(StartServer(cfg))
 }
 
-func StartServer(cfg *config.Config) error {
+func StartServer(cfg *Config) error {
 	//err := InitOIDCProviders(cfg.Content.OIDC.Providers)
 	//if err != nil {
 	//	return err
 	//}
-	oidc, err := oidc2.NewFromConfig(cfg.Content.OIDC.Providers, cfg.Content.OIDC.BaseUrl)
+	oidc, err := NewFromConfig(cfg.Content.OIDC.Providers, cfg.Content.OIDC.BaseUrl)
 	if err != nil {
 		return err
 	}
 
-	ws, err := http.NewWebserver(cfg, oidc)
+	ws, err := NewWebserver(cfg, oidc)
 	if err != nil {
 		return err
 	}

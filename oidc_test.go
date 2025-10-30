@@ -1,4 +1,4 @@
-package oidc
+package main
 
 import (
 	"testing"

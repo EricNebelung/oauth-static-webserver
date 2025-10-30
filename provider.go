@@ -1,4 +1,4 @@
-package oidc
+package main
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"oauth-static-webserver/config"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -18,7 +17,7 @@ import (
 type Providers map[string]*Provider
 
 // newProviders creates all configured providers.
-func newProviders(cfg []config.OIDCProvider, baseUrl string) (Providers, error) {
+func newProviders(cfg []OIDCProvider, baseUrl string) (Providers, error) {
 	p := make(Providers)
 	for _, c := range cfg {
 		provider, err := newProvider(c, baseUrl)
@@ -37,7 +36,7 @@ type Provider struct {
 }
 
 type ProviderConfig struct {
-	config.OIDCProvider
+	OIDCProvider
 	IssuerUrl string `json:"issuer"`
 }
 
@@ -45,7 +44,7 @@ type ProviderConfig struct {
 // It will fetch all important data from the well-known url.
 // Then the oidc.Provider and the required oauth2.Config will be created.
 // The callback-url requires the base url as base to build.
-func newProvider(cfg config.OIDCProvider, baseUrl string) (*Provider, error) {
+func newProvider(cfg OIDCProvider, baseUrl string) (*Provider, error) {
 	p := new(Provider)
 	p.cfg = ProviderConfig{OIDCProvider: cfg}
 	err := p.cfg.resolveFromIdP()
