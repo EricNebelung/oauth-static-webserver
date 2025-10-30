@@ -24,6 +24,7 @@ type Config struct {
 }
 
 type Settings struct {
+	LogLevel   string          `env:"LOG_LEVEL" env-default:"info" env-description:"Logging level: debug, info, warn, error"`
 	Host       SettingsHost    `env-prefix:"HOST_"`
 	Session    SettingsSession `env-prefix:"SESSION_"`
 	ConfigPath string          `env:"CONFIG_PATH" env-default:"/etc/oauth-resource-proxy/config.yaml"`
@@ -112,6 +113,13 @@ func LoadAndProcessConfig() (*Config, error) {
 	if err != nil {
 		log.WithError(err).Fatal("error loading config")
 	}
+
+	// apply log level
+	level, err := log.ParseLevel(cfg.Settings.LogLevel)
+	if err != nil {
+		log.WithError(err).Fatal("invalid log level in config")
+	}
+	log.SetLevel(level)
 
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	err = cfg.Validate(validate)

@@ -8,6 +8,8 @@ import (
 
 func init() {
 	log.SetOutput(os.Stdout)
+	// log level will be set in config processing based on passed env variable
+	// for now set to debug for initial startup logs
 	log.SetLevel(log.DebugLevel)
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp:   true,

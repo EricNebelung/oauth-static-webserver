@@ -60,7 +60,29 @@ docker compose -f compose-build.yaml up
 
 ## Usage
 
-Before starting, you must configure the server using a `config.yaml` file:
+### Environment Variables and Configuration
+
+First, you must provide the required environment variables for OIDC:
+- `LOG_LEVEL`: The logging level (e.g., `debug`, `info`, `warn`, `error`). Default is `info`.
+- `HOST_ADDRESS`: The host address to bind the server (e.g., `localhost`).
+- `HOST_PORT`: The host and port to bind the server (e.g., `1235`). Default is `8080`.
+- `SESSION_KEY`: A secret key for session management (e.g., `mysecretkey123`). **This is required for secure session handling.**
+- `SESSION_STORE_PROVIDER`: The session store provider (e.g., `filesystem`, `redis`). Default is `filesystem`.
+- `SESSION_STORE_DIRECTORY`: The directory for session storage when using `filesystem` (e.g., `/tmp/sessions`).
+- `SESSION_STORE_REDIS_ADDRESS`: The Redis server address when using `redis` (e.g., `localhost`).
+- `SESSION_STORE_REDIS_PORT`: The Redis server port when using `redis` (e.g., `6379`). Default is `6379`.
+- `SESSION_STORE_REDIS_USERNAME`: The Redis server username when using `redis` (e.g., `default`).
+- `SESSION_STORE_REDIS_PASSWORD`: The Redis server password when using `redis` (e.g., `mypassword`).
+- `SESSION_STORE_REDIS_DB`: The Redis database number when using `redis` (e.g., `0`). Default is `0`.
+- `SESSION_STORE_REDIS_POOL_SIZE`: The Redis connection pool size when using `redis` (e.g., `10`). Default is `10`.
+- `CONFIG_PATH`: The path to the configuration file (e.g., `./config.yaml`). Default is `/etc/oauth-static-webserver/config.yaml`.
+
+All environment variables are required except those with default values.
+The requirement for the `SESSION_STORE_REDIS_*` and `SESSION_STORE_DIRECTORY` variables depends on the chosen `SESSION_STORE_PROVIDER`.
+
+### Configuration File
+
+Also, you must configure the server using a `config.yaml` file:
 ```yaml
 oidc:
   # Base URL for callback (and more) - must accessible from the internet
