@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -51,46 +50,54 @@ func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
 		providerId := c.Param("provider")
 		oidcProv, ok := o.providers[providerId]
 		if !ok {
-			return c.String(http.StatusBadRequest, "Unbekannter OIDC-Provider")
+			log.Debugf("OIDC provider %s not found", providerId)
+			return c.String(http.StatusBadRequest, "unknown OIDC provider")
 		}
 
 		sess, err := session.Get(sessionName, c)
 		if err != nil {
-			return c.String(http.StatusInternalServerError, "Fehler beim Abrufen der Session")
+			log.WithError(err).Error("Failed to get session")
+			return c.String(http.StatusInternalServerError, "failed to get session")
 		}
 
 		// collect and check state to prevent CSRF
 		receivedState := c.QueryParam("state")
 		expectedState, ok := sess.Values["state"].(string)
 		if !ok || receivedState != expectedState {
-			return c.String(http.StatusUnauthorized, "Ungültiger oder fehlender 'state' Parameter")
+			log.Debugf("OIDC state mismatch for provider %s", providerId)
+			return c.String(http.StatusUnauthorized, "state mismatch")
 		}
 
 		code := c.QueryParam("code")
 		if code == "" {
-			return c.String(http.StatusBadRequest, "Fehlender 'code' Parameter")
+			log.Debugf("OIDC code missing from provider %s", providerId)
+			return c.String(http.StatusBadRequest, "code parameter missing")
 		}
 
 		oauth2Token, err := oidcProv.oauth2Config.Exchange(ctx, code)
 		if err != nil {
-			return c.String(http.StatusInternalServerError, fmt.Sprintf("Fehler beim Token-Austausch: %v", err))
+			log.WithError(err).Error("Failed to get token")
+			return c.String(http.StatusInternalServerError, "failed to get token")
 		}
 
 		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 		if !ok {
-			return c.String(http.StatusInternalServerError, "Kein ID Token in der Antwort")
+			log.Debugf("OIDC id_token missing from token")
+			return c.String(http.StatusInternalServerError, "no id_token in token response")
 		}
 
 		verifier := oidcProv.provider.Verifier(&oidc.Config{ClientID: oidcProv.oauth2Config.ClientID})
 		idToken, err := verifier.Verify(ctx, rawIDToken)
 		if err != nil {
-			return c.String(http.StatusUnauthorized, fmt.Sprintf("ID Token Verifizierung fehlgeschlagen: %v", err))
+			log.WithError(err).Error("Failed to verify token")
+			return c.String(http.StatusUnauthorized, "failed to verify ID token")
 		}
 
 		// collect claims from id token
 		var idTokenClaims jwtClaims
 		if err := idToken.Claims(&idTokenClaims); err != nil {
-			return c.String(http.StatusInternalServerError, fmt.Sprintf("Fehler beim Extrahieren der Claims: %v", err))
+			log.WithError(err).Error("Failed to parse claims")
+			return c.String(http.StatusInternalServerError, "failed to parse claims")
 		}
 
 		providerSessions, ok := sess.Values[providerSessionsKey].(map[string]ProviderSession)
@@ -111,7 +118,8 @@ func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
 		}
 		// save session
 		if err := sess.Save(c.Request(), c.Response()); err != nil {
-			return c.String(http.StatusInternalServerError, fmt.Sprintf("Fehler beim Speichern der Session: %v", err))
+			log.WithError(err).Error("Failed to save session")
+			return c.String(http.StatusInternalServerError, "failed to save session")
 		}
 		// redirect to original target
 		return c.Redirect(http.StatusFound, redirectURL)
@@ -147,8 +155,6 @@ func (o *OIDC) CreateMiddleware(
 			}
 
 			providerSession, ok := providerSessions[providerId]
-			pSJ, _ := json.Marshal(providerSession)
-			fmt.Println("Provider Session:", string(pSJ))
 
 			if !ok || (providerSession.ExpiresAt > 0 && providerSession.ExpiresAt < time.Now().Unix()) {
 				return redirectForAuth(oauth2Config, c)
@@ -168,7 +174,7 @@ func redirectForAuth(oauth2Config oauth2.Config, c echo.Context) error {
 
 	sess, err := session.Get(sessionName, c)
 	if err != nil {
-		log.Printf("Error getting session: %v", err)
+		log.WithError(err).Error("Session cannot be retrieved")
 		return c.String(http.StatusInternalServerError, "Session cannot be retrieved")
 	}
 

@@ -29,10 +29,6 @@ func main() {
 }
 
 func StartServer(cfg *Config) error {
-	//err := InitOIDCProviders(cfg.Content.OIDC.Providers)
-	//if err != nil {
-	//	return err
-	//}
 	oidc, err := NewFromConfig(cfg.Content.OIDC.Providers, cfg.Content.OIDC.BaseUrl)
 	if err != nil {
 		return err
