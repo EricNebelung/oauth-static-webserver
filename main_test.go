@@ -9,9 +9,13 @@ import (
 )
 
 func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
+	httpPort, err := test.GetFreePort()
+	if err != nil {
+		panic(err)
+	}
 	return Config{
 		Settings: Settings{
-			Host: SettingsHost{Address: "", Port: 8454},
+			Host: SettingsHost{Address: "", Port: httpPort},
 			Session: SettingsSession{
 				Key:            "472347328478392",
 				StoreDriver:    "filesystem",
@@ -20,7 +24,7 @@ func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
 		},
 		Content: ContentConfig{
 			OIDC: ContentConfigOIDC{
-				BaseUrl: "http://localhost:8454",
+				BaseUrl: fmt.Sprintf("http://localhost:%d", httpPort),
 				Providers: []OIDCProvider{
 					{
 						Id:           "test-1",
@@ -60,7 +64,7 @@ func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
 	}
 }
 
-func SetupSWS() (func(), *mockoidc.MockOIDC, *Webserver, error) {
+func SetupSWS() (*Config, *mockoidc.MockOIDC, *Webserver, error) {
 	m, err := mockoidc.Run()
 	if err != nil {
 		return nil, nil, nil, err
@@ -91,10 +95,5 @@ func SetupSWS() (func(), *mockoidc.MockOIDC, *Webserver, error) {
 		_ = os.RemoveAll(sessionStorage)
 		return nil, nil, nil, err
 	}
-	return func() {
-		_ = m.Shutdown()
-		rm()
-		_ = os.RemoveAll(sessionStorage)
-		_ = ws.Close()
-	}, m, ws, nil
+	return &cfg, m, ws, nil
 }

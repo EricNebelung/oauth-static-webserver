@@ -72,7 +72,7 @@ func (w *Webserver) Start() error {
 }
 
 // StartAsync the webserver in a new goroutine and provide a close function.
-func (w *Webserver) StartAsync() (func(), error) {
+func (w *Webserver) StartAsync() error {
 	address := w.cfg.Settings.GetWSAddress()
 	log.Infof("Listening on %s", address)
 	go func() {
@@ -81,9 +81,7 @@ func (w *Webserver) StartAsync() (func(), error) {
 			log.WithError(err).Error("Error starting server")
 		}
 	}()
-	return func() {
-		_ = w.e.Close()
-	}, nil
+	return nil
 }
 
 func (w *Webserver) Close() error {

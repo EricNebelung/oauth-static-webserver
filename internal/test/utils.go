@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -67,4 +68,18 @@ func AssertBodyString(t *testing.T, res *http.Response, expected string) {
 	}
 	body := string(buf)
 	assert.Equal(t, expected, body)
+}
+
+// GetFreePort asks the kernel for a free open port that is ready to use.
+// From: https://gist.github.com/sevkin/96bdae9274465b2d09191384f86ef39d
+func GetFreePort() (port int, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return l.Addr().(*net.TCPAddr).Port, nil
+		}
+	}
+	return
 }

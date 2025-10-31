@@ -27,6 +27,7 @@ type httpTestEnv struct {
 	M      *mockoidc.MockOIDC
 	WS     *Webserver
 	Client *http.Client
+	Config *Config
 }
 
 func (h *httpTestEnv) Close() error {
@@ -38,7 +39,7 @@ func (h *httpTestEnv) Close() error {
 }
 
 func (h *httpTestEnv) url(path string) string {
-	return fmt.Sprintf("http://localhost:8454/%s", path)
+	return fmt.Sprintf("%s/%s", h.Config.Content.OIDC.BaseUrl, path)
 }
 
 func (h *httpTestEnv) resetClient(t *testing.T) {
@@ -47,15 +48,15 @@ func (h *httpTestEnv) resetClient(t *testing.T) {
 
 func newHttpTestEnv(t *testing.T) httpTestEnv {
 	t.Helper()
-	_, m, ws, err := SetupSWS()
+	cfg, m, ws, err := SetupSWS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = ws.StartAsync()
+	err = ws.StartAsync()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return httpTestEnv{m, ws, testHelper.HttpClient(t)}
+	return httpTestEnv{m, ws, testHelper.HttpClient(t), cfg}
 }
 
 // ------ TESTS ------
@@ -69,16 +70,8 @@ func TestSuccessfulGet(t *testing.T) {
 		}
 	}()
 
-	// testGet function to simplify repetitive tests
 	testGet := func(page int, expectedStatus int, expectedBody string) {
-		result, err := env.Client.Get(env.url(fmt.Sprintf("page%d/file.txt", page)))
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Equal(t, expectedStatus, result.StatusCode)
-		if expectedBody != "" {
-			testHelper.AssertBodyString(t, result, expectedBody)
-		}
+		testGet(t, env, page, expectedStatus, expectedBody)
 	}
 
 	// --- test without user ---
@@ -101,5 +94,52 @@ func TestSuccessfulGet(t *testing.T) {
 
 	testGet(1, 200, "page=1")
 	testGet(2, 200, "page=2")
-	testGet(3, 403, "")
+	testGet(3, 403, "You do not have the required permissions to access this resource.")
+}
+
+func TestMockOIDCError(t *testing.T) {
+	env := newHttpTestEnv(t)
+	defer func() {
+		err := env.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	testGet := func(page int, expectedStatus int, expectedBody string) {
+		testGet(t, env, page, expectedStatus, expectedBody)
+	}
+
+	env.M.QueueError(&mockoidc.ServerError{
+		Code:  http.StatusInternalServerError,
+		Error: mockoidc.InternalServerError,
+	})
+	env.M.QueueError(&mockoidc.ServerError{
+		Code: http.StatusNotImplemented,
+	})
+
+	testGet(1, 200, "page=1")
+	testGet(2, 500, "")
+	testGet(3, 501, "")
+	// after all errors, normal operation should continue
+	testGet(1, http.StatusOK, "page=1")
+	// auth with default user -> page2 allow access to all authenticated users
+	testGet(2, http.StatusOK, "")
+	// page3 require group, which default user does not have
+	testGet(3, http.StatusForbidden, "")
+}
+
+// ------ HELPERS ------
+
+// testGet function to simplify repetitive tests
+func testGet(t *testing.T, env httpTestEnv, page int, expectedStatus int, expectedBody string) {
+	t.Helper()
+	result, err := env.Client.Get(env.url(fmt.Sprintf("page%d/file.txt", page)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedStatus, result.StatusCode)
+	if expectedBody != "" {
+		testHelper.AssertBodyString(t, result, expectedBody)
+	}
 }
