@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -68,7 +67,7 @@ func NewWebserver(cfg *Config, oidc *OIDC) (*Webserver, error) {
 // Start the webserver with the Address and Port specified in the config.
 func (w *Webserver) Start() error {
 	address := w.cfg.Settings.GetWSAddress()
-	slog.Info(fmt.Sprintf("Listening on %s", address))
+	log.Infof("Listening on %s", address)
 	return w.e.Start(address)
 }
 
@@ -115,7 +114,7 @@ func (w *Webserver) createSessionStore() error {
 			[]byte(cfg.Key),
 		)
 		if err != nil || store == nil {
-			slog.Error("Error creating redis session store", "err", err)
+			log.WithError(err).Error("Error creating redis session store")
 			return err
 		}
 		store.Options.MaxAge = 60 * 60 * 24 // 1 day
@@ -124,7 +123,7 @@ func (w *Webserver) createSessionStore() error {
 	} else if cfg.StoreDriver == "filesystem" {
 		err := os.MkdirAll(cfg.StoreDirectory, 0700)
 		if err != nil {
-			slog.Error("Error creating Filesystem session store", "err", err)
+			log.WithError(err).Error("Error creating Filesystem session store")
 			return err
 		}
 
@@ -139,11 +138,12 @@ func (w *Webserver) createSessionStore() error {
 }
 
 func (w *Webserver) createStaticPage(e *echo.Echo, config StaticPage) (*echo.Group, error) {
-	slog.Info(
+	log.WithFields(log.Fields{
+		"id":  config.Id,
+		"dir": config.Dir,
+		"url": config.Url,
+	}).Info(
 		"Starting registering static page",
-		"id", config.Id,
-		"dir", config.Dir,
-		"url", config.Url,
 	)
 
 	// remove trailing slash if present
@@ -154,8 +154,11 @@ func (w *Webserver) createStaticPage(e *echo.Echo, config StaticPage) (*echo.Gro
 	// attach protection if configured
 	protection := config.Protection
 	if protection != nil {
-		slog.Info("attaching protection for static page", "id", config.Id, "provider", protection.Provider)
-		//group.Use(RequireAuthMiddleware(protection.Provider, protection.Groups, baseUrl1))
+		log.WithFields(log.Fields{
+			"id":       config.Id,
+			"provider": protection.Provider,
+		}).Info("attaching protection for static page")
+
 		protector, err := w.oidc.CreateMiddleware(protection.Provider, protection.Groups)
 		if err != nil {
 			log.WithError(err).Error("Error creating protection middleware")
