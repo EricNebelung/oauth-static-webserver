@@ -20,7 +20,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: ⬇️ Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       # --- SETUP AND LOGIN ---
@@ -47,10 +47,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-          flavor: |
-            latest=auto
+          #tags: |
+          #  type=semver,pattern={{version}}
+          #flavor: |
+          #  latest=auto
 
       # --- BUILD UND PUSH ---
 
