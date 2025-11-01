@@ -59,6 +59,15 @@ func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
 						Groups:   []string{"group-test"},
 					},
 				},
+				{
+					Id:  "page-4",
+					Dir: fmt.Sprintf("%s/page4", staticPath),
+					Url: "/page4",
+					Protection: &StaticPageProtection{
+						Provider:   "test-1",
+						Expression: `text.contains(user.preferred_username, "er2")`,
+					},
+				},
 			},
 		},
 	}

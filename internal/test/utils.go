@@ -26,8 +26,8 @@ func PrepareContentFolder() (func(), string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	// create 3 page dirs with file.txt (content the counter 1 to 3)
-	for i := 0; i < 3; i++ {
+	// create 3 page dirs with file.txt (content the counter 1 to 4)
+	for i := 0; i < 4; i++ {
 		pageDir := fmt.Sprintf("%s/page%d", dirName, i+1)
 		err := os.Mkdir(pageDir, 0o755)
 		if err != nil {

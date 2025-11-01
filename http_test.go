@@ -87,6 +87,7 @@ func TestSuccessfulGet(t *testing.T) {
 	testGet(1, 200, "page=1")
 	testGet(2, 200, "page=2")
 	testGet(3, 200, "page=3")
+	testGet(4, 403, "You do not have the required permissions to access this resource.")
 
 	// --- test with user2 ---
 	env.M.QueueUser(User2)
@@ -95,6 +96,7 @@ func TestSuccessfulGet(t *testing.T) {
 	testGet(1, 200, "page=1")
 	testGet(2, 200, "page=2")
 	testGet(3, 403, "You do not have the required permissions to access this resource.")
+	testGet(4, 200, "page=4")
 }
 
 func TestMockOIDCError(t *testing.T) {

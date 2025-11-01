@@ -80,6 +80,17 @@ func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
 			return c.String(http.StatusInternalServerError, "failed to get token")
 		}
 
+		ui, err := oidcProv.provider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
+		if err != nil {
+			log.WithError(err).Error("Failed to get user info")
+			return c.String(http.StatusInternalServerError, "failed to get user info")
+		}
+		var uiClaims map[string]any
+		if err := ui.Claims(&uiClaims); err != nil {
+			log.WithError(err).Error("Failed to parse user info claims")
+			return c.String(http.StatusInternalServerError, "failed to parse user info claims")
+		}
+
 		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 		if !ok {
 			log.Debugf("OIDC id_token missing from token")
@@ -108,6 +119,7 @@ func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
 			ExpiresAt: oauth2Token.Expiry.Unix(),
 			Subject:   idTokenClaims.Subject,
 			Groups:    idTokenClaims.Groups,
+			UserInfo:  uiClaims,
 		}
 		sess.Values[providerSessionsKey] = providerSessions
 
@@ -128,12 +140,23 @@ func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
 
 // CreateMiddleware create a middleware, which protect all following routes.
 // It checks for user auth and redirect to IdP auth url if needed or redirect to an error page.
-// The providerId is required to link to the right provider and the user must be in one of the allowedGroups
-// to pass the auth test. If the list is empty, then the group check is disabled.
-func (o *OIDC) CreateMiddleware(
-	providerId string,
-	allowedGroups []string,
-) (echo.MiddlewareFunc, error) {
+// The user must be in one of the allowedGroups to pass the auth test.
+// If the list is empty, then the group check is disabled.
+// Also, it evaluates the expression if present and only allows access if the expression evaluates to true.
+func (o *OIDC) CreateMiddleware(protection *StaticPageProtection) (echo.MiddlewareFunc, error) {
+	providerId := protection.Provider
+	allowedGroups := protection.Groups
+
+	var expression *Expression = nil
+	if protection.Expression != "" {
+		expr, err := newExpression(protection.Expression)
+		if err != nil {
+			log.WithError(err).Error("Error compiling expression")
+			return nil, err
+		}
+		expression = expr
+	}
+
 	provider, ok := o.providers[providerId]
 	if !ok {
 		errorMsg := fmt.Errorf("no OIDC provider with ID %s", providerId)
@@ -158,6 +181,17 @@ func (o *OIDC) CreateMiddleware(
 
 			if !ok || (providerSession.ExpiresAt > 0 && providerSession.ExpiresAt < time.Now().Unix()) {
 				return redirectForAuth(oauth2Config, c)
+			}
+
+			if expression != nil {
+				result, err := expression.Eval(providerSession.UserInfo)
+				if err != nil {
+					log.WithError(err).Error("Error evaluating expression")
+					return c.String(http.StatusInternalServerError, "error evaluating access expression")
+				}
+				if !result {
+					return c.String(http.StatusForbidden, "You do not have the required permissions to access this resource.")
+				}
 			}
 
 			if !checkHasOneGroup(allowedGroups, providerSession.Groups) {

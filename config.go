@@ -77,8 +77,9 @@ type StaticPage struct {
 }
 
 type StaticPageProtection struct {
-	Provider string   `yaml:"provider" validate:"alphanum"`
-	Groups   []string `yaml:"groups" validate:"dive,alphanum"`
+	Provider   string   `yaml:"provider" validate:"alphanum"`
+	Expression string   `yaml:"expression"`
+	Groups     []string `yaml:"groups" validate:"dive,alphanum"`
 }
 
 // --- Config loading and processing ---

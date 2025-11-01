@@ -157,7 +157,7 @@ func (w *Webserver) createStaticPage(e *echo.Echo, config StaticPage) (*echo.Gro
 			"provider": protection.Provider,
 		}).Info("attaching protection for static page")
 
-		protector, err := w.oidc.CreateMiddleware(protection.Provider, protection.Groups)
+		protector, err := w.oidc.CreateMiddleware(protection)
 		if err != nil {
 			log.WithError(err).Error("Error creating protection middleware")
 			return nil, err
