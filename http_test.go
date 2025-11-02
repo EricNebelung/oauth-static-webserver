@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	testHelper "oauth-static-webserver/internal/test"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-playground/assert/v2"
 	"github.com/oauth2-proxy/mockoidc"
+	"golang.org/x/net/http2"
 )
 
 var (
@@ -46,9 +52,9 @@ func (h *httpTestEnv) resetClient(t *testing.T) {
 	h.Client = testHelper.HttpClient(t)
 }
 
-func newHttpTestEnv(t *testing.T) httpTestEnv {
+func newHttpTestEnv(t *testing.T, tls *SettingsTLS) httpTestEnv {
 	t.Helper()
-	cfg, m, ws, err := SetupSWS()
+	cfg, m, ws, err := SetupSWS(tls)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,10 +65,10 @@ func newHttpTestEnv(t *testing.T) httpTestEnv {
 	return httpTestEnv{m, ws, testHelper.HttpClient(t), cfg}
 }
 
-// ------ TESTS ------
+// ------ TEST PROTECTION ------
 
 func TestSuccessfulGet(t *testing.T) {
-	env := newHttpTestEnv(t)
+	env := newHttpTestEnv(t, &SettingsTLS{Enabled: false})
 	defer func() {
 		err := env.Close()
 		if err != nil {
@@ -100,7 +106,7 @@ func TestSuccessfulGet(t *testing.T) {
 }
 
 func TestMockOIDCError(t *testing.T) {
-	env := newHttpTestEnv(t)
+	env := newHttpTestEnv(t, &SettingsTLS{Enabled: false})
 	defer func() {
 		err := env.Close()
 		if err != nil {
@@ -129,6 +135,71 @@ func TestMockOIDCError(t *testing.T) {
 	testGet(2, http.StatusOK, "")
 	// page3 require group, which default user does not have
 	testGet(3, http.StatusForbidden, "")
+}
+
+// ------ TEST TLS and HTTP2 ------
+
+func TestHttp2(t *testing.T) {
+	env := newHttpTestEnv(t, &SettingsTLS{Enabled: false})
+	defer func() {
+		err := env.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	client := &http.Client{
+		Transport: &http2.Transport{
+			AllowHTTP: true,
+			// Use non-TLS connection for HTTP2
+			DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+				return net.Dial(network, addr)
+			},
+		},
+	}
+
+	res, err := client.Get(env.url("page1/file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	proto := res.ProtoMajor
+	if proto != 2 {
+		t.Fatalf("expected HTTP2 response, got HTTP/%d", proto)
+	}
+}
+
+func TestHttps(t *testing.T) {
+	certClose, certFile, keyFile := testHelper.CreateTempCert(t)
+	env := newHttpTestEnv(t, &SettingsTLS{
+		Enabled:      true,
+		HTTPRedirect: true,
+		CertFile:     certFile,
+		KeyFile:      keyFile,
+	})
+	defer func() {
+		certClose()
+		err := env.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// wait a bit for server to start
+	time.Sleep(250 * time.Millisecond)
+
+	// client that skips cert verification (self-signed cert)
+	client := &http.Client{Transport: &http2.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+
+	res, err := client.Get(strings.Replace(env.url("page1/file.txt"), "http://", "https://", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	proto := res.ProtoMajor
+	if proto != 2 {
+		t.Fatalf("expected HTTP2 response, got HTTP/%d", proto)
+	}
 }
 
 // ------ HELPERS ------

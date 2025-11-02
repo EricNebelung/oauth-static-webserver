@@ -1,8 +1,14 @@
 package test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
@@ -12,6 +18,8 @@ import (
 
 	"github.com/go-playground/assert/v2"
 	"github.com/labstack/gommon/random"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func RandHex(n uint8) string {
@@ -77,9 +85,79 @@ func GetFreePort() (port int, err error) {
 	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
 		var l *net.TCPListener
 		if l, err = net.ListenTCP("tcp", a); err == nil {
-			defer l.Close()
+			defer func(l *net.TCPListener) {
+				err := l.Close()
+				if err != nil {
+					log.WithError(err).Error("Failed to close listener")
+				}
+			}(l)
 			return l.Addr().(*net.TCPAddr).Port, nil
 		}
 	}
 	return
+}
+
+// CreateTempCert creates a temporary self-signed certificate and key for testing purposes.
+// It returns a cleanup function to remove the temporary files, along with the paths to the certificate and key.
+func CreateTempCert(t *testing.T) (func(), string, string) {
+	t.Helper()
+	certDir, err := os.MkdirTemp("", "oauth2-proxy-test-cert")
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPath := fmt.Sprintf("%s/cert.pem", certDir)
+	keyPath := fmt.Sprintf("%s/key.pem", certDir)
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Test Co"},
+			CommonName:   "localhost",
+		},
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().Add(24 * time.Hour),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	certOut, err := os.Create(certPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = certOut.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyOut, err := os.Create(keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = keyOut.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return func() {
+		_ = os.RemoveAll(certDir)
+	}, certPath, keyPath
 }

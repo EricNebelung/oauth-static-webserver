@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/ilyakaznacheev/cleanenv"
+	"golang.org/x/net/http2"
 	"gopkg.in/yaml.v3"
 
 	log "github.com/sirupsen/logrus"
@@ -26,6 +28,8 @@ type Config struct {
 type Settings struct {
 	LogLevel   string          `env:"LOG_LEVEL" env-default:"info" env-description:"Logging level: debug, info, warn, error"`
 	Host       SettingsHost    `env-prefix:"HOST_"`
+	HTTP2      SettingsHTTP2   `env-prefix:"HTTP2_"`
+	TLS        SettingsTLS     `env-prefix:"TLS_"`
 	Session    SettingsSession `env-prefix:"SESSION_"`
 	ConfigPath string          `env:"CONFIG_PATH" env-default:"/etc/oauth-resource-proxy/config.yaml"`
 }
@@ -50,6 +54,23 @@ type SettingsSession struct {
 type SettingsHost struct {
 	Address string `env:"ADDRESS"`
 	Port    int    `env:"PORT" env-default:"8080"`
+}
+
+type SettingsHTTP2 struct {
+	MaxConcurrentStreams int `env:"MAX_CONCURRENT_STREAMS" env-default:"100"`
+	// frame size in bytes
+	MaxReadFrameSize int `env:"MAX_READ_FRAME_SIZE" env-default:"1048576"`
+	// timeout in seconds
+	IdleTimeout int `env:"IDLE_TIMEOUT" env-default:"10"`
+}
+
+type SettingsTLS struct {
+	Enabled             bool   `env:"ENABLED" env-default:"false"`
+	HTTPRedirect        bool   `env:"HTTP_REDIRECT" env-default:"true"`
+	CertFile            string `env:"CERT_FILE"`
+	KeyFile             string `env:"KEY_FILE"`
+	AutoTLS             bool   `env:"AUTO_TLS" env-default:"false"`
+	AutoTLSCertCacheDir string `env:"AUTO_TLS_CERT_CACHE_DIR"`
 }
 
 type ContentConfig struct {
@@ -153,6 +174,15 @@ func loadSettingsFromEnv() (Settings, error) {
 
 func (s Settings) GetWSAddress() string {
 	return fmt.Sprintf("%s:%d", s.Host.Address, s.Host.Port)
+}
+
+// GetHttps2Server builds a http2.Server from the settings
+func (s SettingsHTTP2) GetHttps2Server() *http2.Server {
+	return &http2.Server{
+		MaxConcurrentStreams: uint32(s.MaxConcurrentStreams),
+		MaxReadFrameSize:     uint32(s.MaxReadFrameSize),
+		IdleTimeout:          time.Duration(s.IdleTimeout) * time.Second,
+	}
 }
 
 func (c *ContentConfig) Validate(validate *validator.Validate) error {

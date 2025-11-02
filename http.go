@@ -10,6 +10,8 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/crypto/acme/autocert"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -21,6 +23,8 @@ type Webserver struct {
 
 	fsStore    *sessions.FilesystemStore
 	redisStore *redistore.RediStore
+
+	tmpDir string
 }
 
 // NewWebserver creates the Echo instanz, the session store and register all middleware and pages.
@@ -30,6 +34,12 @@ func NewWebserver(cfg *Config, oidc *OIDC) (*Webserver, error) {
 		cfg:  cfg,
 		oidc: oidc,
 	}
+
+	// when TLS and http redirection is enabled, register the redirect handler
+	if tls := cfg.Settings.TLS; tls.Enabled && tls.HTTPRedirect {
+		ws.e.Pre(middleware.HTTPSRedirect())
+	}
+
 	err := ws.createSessionStore()
 	if err != nil {
 		log.WithError(err).Error("Error creating session store")
@@ -65,18 +75,66 @@ func NewWebserver(cfg *Config, oidc *OIDC) (*Webserver, error) {
 }
 
 // Start the webserver with the Address and Port specified in the config.
+// It will always start a HTTP2 server, regardless if TLS is configured or not.
+// Also, it will use TLS with certs or Auto-TLS if configured in the settings.
 func (w *Webserver) Start() error {
 	address := w.cfg.Settings.GetWSAddress()
+	tls := w.cfg.Settings.TLS
+
+	// cleartext HTTP2 server (H2C)
+	if !tls.Enabled {
+		s := w.cfg.Settings.HTTP2.GetHttps2Server()
+		return w.e.StartH2CServer(address, s)
+	}
+
+	// TLS HTTP2 server (H2) with predefined certs
+	// when TLS is enabled but AutoTLS is disabled
+	if !tls.AutoTLS {
+		// check if cert and key files are present
+		if tls.CertFile == "" || tls.KeyFile == "" {
+			err := errors.New("TLS is enabled but cert or key file is not set")
+			log.WithError(err).Error("Error starting server")
+			return err
+		} else {
+			if _, err := os.Stat(tls.CertFile); os.IsNotExist(err) {
+				log.WithError(err).Errorf("TLS cert file %s does not exist", tls.CertFile)
+				return err
+			}
+			if _, err := os.Stat(tls.KeyFile); os.IsNotExist(err) {
+				log.WithError(err).Errorf("TLS key file %s does not exist", tls.KeyFile)
+				return err
+			}
+		}
+
+		cert, key := tls.CertFile, tls.KeyFile
+		return w.e.StartTLS(address, cert, key)
+	}
+
+	// TLS HTTP2 server (H2) with AutoTLS
+	cacheDir := tls.AutoTLSCertCacheDir
+	// when no cache dir is set, create a tmp dir
+	if cacheDir == "" {
+		tmpDir, err := os.MkdirTemp("", "oauth-static-webserver-autotls")
+		if err != nil {
+			log.WithError(err).Error("Error creating temp dir for AutoTLS cert cache")
+			return err
+		}
+		w.tmpDir = tmpDir
+		cacheDir = tmpDir
+		log.Warnf("No AutoTLS cert cache dir set, using temp dir: %s", cacheDir)
+	}
+	cache := autocert.DirCache(cacheDir)
+	w.e.AutoTLSManager.Cache = cache
+
 	log.Infof("Listening on %s", address)
-	return w.e.Start(address)
+	return w.e.StartAutoTLS(address)
 }
 
 // StartAsync the webserver in a new goroutine and provide a close function.
+// It calls the Start function in a new goroutine and logs any error returned.
 func (w *Webserver) StartAsync() error {
-	address := w.cfg.Settings.GetWSAddress()
-	log.Infof("Listening on %s", address)
 	go func() {
-		err := w.e.Start(address)
+		err := w.Start()
 		if err != nil {
 			log.WithError(err).Error("Error starting server")
 		}
@@ -87,6 +145,13 @@ func (w *Webserver) StartAsync() error {
 func (w *Webserver) Close() error {
 	if w.redisStore != nil {
 		return w.redisStore.Close()
+	}
+	if len(w.tmpDir) > 0 {
+		err := os.RemoveAll(w.tmpDir)
+		if err != nil {
+			log.WithError(err).Error("Error removing temp dir")
+			return err
+		}
 	}
 	return nil
 }

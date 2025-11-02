@@ -8,7 +8,7 @@ import (
 	"github.com/oauth2-proxy/mockoidc"
 )
 
-func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
+func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string, tls *SettingsTLS) Config {
 	httpPort, err := test.GetFreePort()
 	if err != nil {
 		panic(err)
@@ -21,6 +21,7 @@ func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
 				StoreDriver:    "filesystem",
 				StoreDirectory: sessionPath,
 			},
+			TLS: *tls,
 		},
 		Content: ContentConfig{
 			OIDC: ContentConfigOIDC{
@@ -73,7 +74,7 @@ func CreateConfig(m *mockoidc.MockOIDC, sessionPath, staticPath string) Config {
 	}
 }
 
-func SetupSWS() (*Config, *mockoidc.MockOIDC, *Webserver, error) {
+func SetupSWS(tls *SettingsTLS) (*Config, *mockoidc.MockOIDC, *Webserver, error) {
 	m, err := mockoidc.Run()
 	if err != nil {
 		return nil, nil, nil, err
@@ -89,7 +90,7 @@ func SetupSWS() (*Config, *mockoidc.MockOIDC, *Webserver, error) {
 		rm()
 		return nil, nil, nil, err
 	}
-	cfg := CreateConfig(m, sessionStorage, contentPath)
+	cfg := CreateConfig(m, sessionStorage, contentPath, tls)
 	oidc, err := NewFromConfig(cfg.Content.OIDC.Providers, cfg.Content.OIDC.BaseUrl)
 	if err != nil {
 		_ = m.Shutdown()
