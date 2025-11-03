@@ -93,8 +93,7 @@ To build the project, follow these steps:
    ```
 
 Now an executable binary named `oauth-static-webserver` should be available in the project directory.
-You can write your own systemd service or any other service configuration.
-Also, you can run the binary directly from the command line.
+From here, you can deploy and run the binary as needed.
 
 The programm does not use any command line argument yet, but all configuration is done via environment variables and a configuration file.
 For more details about the configuration, please refer to the [Configuration](configuration.md) documentation.
