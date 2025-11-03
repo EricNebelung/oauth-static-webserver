@@ -215,7 +215,7 @@ func validateStruct(validate *validator.Validate, value any) error {
 	if err != nil {
 		var invalidValidationError *validator.InvalidValidationError
 		if errors.As(err, &invalidValidationError) {
-			fmt.Println(err)
+			log.WithError(err).Warn("error validating struct")
 			return err
 		}
 	}

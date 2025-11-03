@@ -43,6 +43,8 @@ type jwtClaims struct {
 
 // CreateCallbackHandler create a callback handler for all providers by using the
 // parameter "provider" to auth on the right OIDC Provider.
+// It verifies the state, gets the token and user info, saves them in the session
+// and redirect to the original target url.
 func (o *OIDC) CreateCallbackHandler() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		ctx := context.Background()
@@ -203,8 +205,10 @@ func (o *OIDC) CreateMiddleware(protection *StaticPageProtection) (echo.Middlewa
 	}, nil
 }
 
+// redirectForAuth redirects the user to the OIDC provider auth url and saves the state in the session.
+// The state is used to prevent CSRF attacks.
 func redirectForAuth(oauth2Config oauth2.Config, c echo.Context) error {
-	fmt.Printf("redirectForAuth called for provider: %s\n", oauth2Config.ClientID)
+	log.Debugf("Redirecting to OIDC provider for auth: %s", oauth2Config.ClientID)
 
 	sess, err := session.Get(sessionName, c)
 	if err != nil {
@@ -230,8 +234,9 @@ func redirectForAuth(oauth2Config oauth2.Config, c echo.Context) error {
 	return c.Redirect(http.StatusFound, authURL)
 }
 
+// checkHasOneGroup checks if at least one of the present groups is in the allowed groups.
+// If the allowed list is empty, then it always returns true to disable the group check.
 func checkHasOneGroup(allowed, present []string) bool {
-	// when no group allowed, then no rule presentGroup rule is present
 	if len(allowed) == 0 {
 		return true
 	}
