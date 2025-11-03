@@ -1,0 +1,39 @@
+name: documentation-deployment
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'mkdocs.yml'
+      - 'docs/**'
+permissions:
+  contents: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Set Cache ID
+        run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
+      - name: Use Cache
+        uses: actions/cache@v4
+        with:
+          key: mkdocs-material-${{ env.cache_id }}
+          path: ~/.cache
+          restore-keys: |
+            mkdocs-material-
+      - name: Install Dependencies
+        run: pip install mkdocs-material mkdocs-glightbox mkdocs-awesome-pages-plugin
+      - name: Build Documentation
+        run: mkdocs build
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: 'gh-pages'
