@@ -59,7 +59,6 @@ plugins:
   - glightbox
   - search
   - awesome-pages
-  - minify
 
 nav:
   - Home: index.md
