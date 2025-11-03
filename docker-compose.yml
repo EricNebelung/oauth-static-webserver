@@ -1,0 +1,33 @@
+networks:
+  oauth-static-webserver:
+    external: false
+
+services:
+  oauth-static-webserver:
+    image: ghcr.io/ericnebelung/oauth-static-webserver:latest
+    restart: always
+    environment:
+      - SESSION_KEY=some_secret_key
+      - SESSION_STORE_DRIVER=redis
+      - SESSION_REDIS_ADDRESS=session-storage
+      - SESSION_REDIS_PORT=6379
+    ports:
+      - "8080:8080"
+    networks:
+      - oauth-static-webserver
+    volumes:
+      - "/etc/oauth-resource-proxy/config.yaml:/etc/oauth-resource-proxy/config.yaml:ro"
+      - "/var/www:/var/www:ro"
+    depends_on:
+      - session-storage
+  session-storage:
+    image: redis:latest
+    restart: always
+    networks:
+      - oauth-static-webserver
+    volumes:
+      - cache:/data
+
+volumes:
+  cache:
+    driver: local

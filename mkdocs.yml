@@ -1,0 +1,67 @@
+# example file: https://github.com/squidfunk/mkdocs-material/blob/master/mkdocs.yml
+
+site_name: OAuth Static Webserver
+
+repo_name: EricNebelung/oauth-static-webserver
+repo_url: https://github.com/EricNebelung/oauth-static-webserver
+
+copyright: Copyright &copy; 2025 Eric Nebelung
+
+theme:
+  icon:
+    repo: fontawesome/brands/github
+  language: en
+  name: material
+  features:
+    - content.code.copy
+    #- navigation.tabs
+    - navigation.tracking
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.details
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - attr_list
+  - md_in_html
+  - pymdownx.blocks.caption
+  - pymdownx.arithmatex:
+      generic: true
+
+plugins:
+  - glightbox
+  - search
+  - awesome-pages
+  - minify
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Configuration: configuration.md

@@ -15,11 +15,12 @@ The software is **not fully tested** yet and is currently under active developme
 
 ## TODOs
 
-- [ ] Integrate **TLS** for use without a reverse proxy.
+- [x] Integrate **TLS** for use without a reverse proxy.
 - [ ] Implement **extensive testing** (unit and integration tests).
-- [ ] Introduce **fine-grained access control rules** (beyond simple group membership).
+  - [x] basic Unit tests for core components.
+- [x] Introduce **fine-grained access control rules** (beyond simple group membership).
 - [ ] **Documentation:**
-    - [ ] Fully cover **Usage and Installation methods**.
+    - [x] Fully cover **Usage and Installation methods**.
     - [ ] Complete **code documentation** (GoDoc).
     - [ ] Improve readability and helpfulness of the **README**.
     - [ ] Conduct a language check (grammar, syntax, and style).

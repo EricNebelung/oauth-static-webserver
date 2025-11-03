@@ -11,6 +11,9 @@ FROM alpine:latest AS run
 
 COPY --from=build-stage /oauth-static-webserver /oauth-static-webserver
 
+WORKDIR /var/www
+VOLUME /var/www
+
 EXPOSE 8080
 
 CMD ["/oauth-static-webserver"]
